@@ -12,6 +12,7 @@ attempts until one succeeds.
 
 - supports only `wild16`
 - defaults to unlisted registration for testing
+- intended lobby catalogue tier is T1 under username `stockfishwild`
 - runs one bot process with one lightweight runner thread per active game
 - defaults to one active game because Stockfish analysis is CPU-bound
 - auto-creates one open Wild 16 lobby game when below the active-game cap
@@ -59,6 +60,8 @@ Key runtime controls:
 - `STOCKFISH_RANDOM_SEED=` for reproducible sampling
 - `KRIEGSPIEL_MAX_ACTIVE_GAMES=1`
 - `KRIEGSPIEL_BOT_LISTED=false` while testing
+- keep `KRIEGSPIEL_BOT_USERNAME=stockfishwild` unless the web app tier mapping
+  is updated with the replacement username
 
 ## Development
 
