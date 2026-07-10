@@ -1,0 +1,15 @@
+[Unit]
+Description=Kriegspiel Stockfish Wild 16 Bot
+After=network-online.target ks-backend.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/ubuntu/dev/kriegspiel/bot-stockfish
+EnvironmentFile=/home/ubuntu/dev/kriegspiel/bot-stockfish/.env
+ExecStart=/home/ubuntu/dev/kriegspiel/bot-stockfish/.venv/bin/stockfish-bot --poll-seconds 2
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
