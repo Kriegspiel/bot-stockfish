@@ -48,9 +48,8 @@ def test_maybe_play_game_retries_ranked_attempts_and_persists_belief(tmp_path, m
         ("/game/game-1/move", {"uci": "e2e4"}),
         ("/game/game-1/move", {"uci": "d2d4"}),
     ]
-    state = api.load_state()
-    assert "game-1" in state["beliefs"]
-    assert state["beliefs"]["game-1"]["observed_referee_log_size"] == 1
+    snapshot = api.checkpoint_store().load_belief("game-1")
+    assert snapshot["observed_referee_log_size"] == 1
 
 
 def test_open_bot_lobby_candidates_filter_to_wild16_bots(monkeypatch) -> None:

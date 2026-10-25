@@ -17,7 +17,7 @@ attempts until one succeeds.
 - defaults to one active game because Stockfish analysis is CPU-bound
 - auto-creates one open Wild 16 lobby game when below the active-game cap
 - samples compatible bot-created Wild 16 waiting games with low probability
-- persists local per-game belief matrices in `.bot-state.json`
+- persists local beliefs in atomic per-game files under `.bot-state.json.games/`
 - falls back to deterministic public-state heuristics when Stockfish is absent
   or analysis fails
 
@@ -77,3 +77,25 @@ pytest
 A production host can run the bot as a service with
 `deploy/kriegspiel-stockfish-bot.service` once credentials have been created on
 that host.
+
+### Checkpoint recovery
+
+The configured state file holds tokens and cooldown/migration metadata. Beliefs
+are stored separately in `<state-file>.games/`, with only active runner snapshots
+cached in memory. Each meaningful evidence change is checkpointed atomically,
+including failed move attempts; unchanged snapshots skip the write.
+
+Startup migrates the old `beliefs` map before runners start, preserving and
+verifying a mode-0600 `<state-file>.legacy-<hash>.bak` backup. Interrupted imports
+resume safely; corrupt/conflicting state fails closed. Keep all backups private.
+Completed checkpoints are removed only after server confirmation. Missing
+assignments, HTTP errors and shutdown preserve durable state. Old checkpoints
+are checked one per discovery cycle without loading lifetime beliefs into RAM.
+
+After gameplay on the new layout, do not restore the migration backup alone to
+run an older bot: offline recovery must include the current per-game snapshots.
+Use separate state paths per process; sharing one path between processes is not
+supported.
+
+`PYTHONPATH=src python scripts/benchmark_checkpoints.py` measures synthetic
+100/10,000-game persistence work in temporary files without production state.

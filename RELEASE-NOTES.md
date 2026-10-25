@@ -1,5 +1,9 @@
 # Release Notes
 
+## 0.1.2 — 2026-10-25
+
+Split belief persistence into atomic per-game checkpoints, migrate and verify legacy state with a protected backup, and clean up server-confirmed completed games. Active runner memory and checkpoint work no longer grow with lifetime game history.
+
 These notes summarize the packaged bot runtime release history reconstructed
 from the current repository state. Add a new section at the top when the
 package version changes or when runtime, deployment-facing, or user-visible bot

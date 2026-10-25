@@ -1,4 +1,4 @@
-.bot-state.json
+.bot-state.json*
 .coverage
 .env
 .pytest_cache/
