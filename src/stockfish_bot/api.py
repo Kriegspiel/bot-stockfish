@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 import os
 import random
@@ -15,6 +14,7 @@ from typing import Any
 
 import requests
 
+from stockfish_bot.checkpoints import CheckpointStore
 from stockfish_bot.belief import BeliefState
 from stockfish_bot.belief import WILD16_RULESET
 from stockfish_bot.belief import apply_move_result_evidence
@@ -38,6 +38,7 @@ LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(level=getattr(logging, LOG_LEVEL, logging.INFO), format="%(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 _STATE_LOCK = threading.RLock()
+_CHECKPOINT_STORE: CheckpointStore | None = None
 _BOT_PROFILE_SYNCED = False
 
 
@@ -110,17 +111,20 @@ def bot_game_pick_probability() -> float:
     return float_env("BOT_GAME_PICK_PROBABILITY", 0.05, minimum=0.0, maximum=1.0)
 
 
+def checkpoint_store() -> CheckpointStore:
+    global _CHECKPOINT_STORE
+    with _STATE_LOCK:
+        if _CHECKPOINT_STORE is None or _CHECKPOINT_STORE.state_path != STATE_PATH:
+            _CHECKPOINT_STORE = CheckpointStore(STATE_PATH)
+        return _CHECKPOINT_STORE
+
+
 def _load_state_unlocked() -> dict[str, Any]:
-    try:
-        return json.loads(STATE_PATH.read_text()) if STATE_PATH.exists() else {}
-    except json.JSONDecodeError:
-        logger.warning("ignoring malformed bot state at %s", STATE_PATH)
-        return {}
+    return checkpoint_store().load_metadata()
 
 
 def _save_state_unlocked(state: dict[str, Any]) -> None:
-    STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    STATE_PATH.write_text(json.dumps(state, indent=2, sort_keys=True))
+    checkpoint_store().save_metadata(state)
 
 
 def load_state() -> dict[str, Any]:
@@ -344,22 +348,21 @@ def game_ruleset(game: dict[str, Any]) -> str:
 
 
 def restore_belief(game_id: str, belief: BeliefState) -> BeliefState:
-    with _STATE_LOCK:
-        state = _load_state_unlocked()
-        beliefs = state.get("beliefs")
-        snapshot = beliefs.get(game_id) if isinstance(beliefs, dict) else None
-    return restore_belief_snapshot(belief, snapshot if isinstance(snapshot, dict) else None)
+    snapshot = checkpoint_store().load_belief(game_id)
+    return restore_belief_snapshot(belief, snapshot)
 
 
 def save_belief(game_id: str, belief: BeliefState) -> None:
-    with _STATE_LOCK:
-        state = _load_state_unlocked()
-        beliefs = state.get("beliefs")
-        if not isinstance(beliefs, dict):
-            beliefs = {}
-        beliefs[game_id] = serialize_belief(belief)
-        state["beliefs"] = beliefs
-        _save_state_unlocked(state)
+    checkpoint_store().save_belief(game_id, serialize_belief(belief))
+
+
+def prune_one_checkpoint() -> None:
+    store = checkpoint_store()
+    ref = store.next_cleanup_ref()
+    if ref is not None:
+        state = get_json(f"/game/{ref}/public-status")
+        if state.get("state") == "completed":
+            store.release(ref, completed=True)
 
 
 def maybe_play_game(game: dict[str, Any] | str) -> bool:
@@ -449,6 +452,8 @@ class GameRunner:
 
                 state_value = state.get("state")
                 if state_value != "active":
+                    if state_value == "completed":
+                        checkpoint_store().release(self.game_ref, completed=True)
                     stop_reason = f"state={state_value}"
                     break
 
@@ -464,6 +469,7 @@ class GameRunner:
 
                 self._wait()
         finally:
+            checkpoint_store().release(self.game_ref)
             logger.info("%s: stopped game runner (%s)", self.game_ref, stop_reason)
 
 
@@ -533,6 +539,7 @@ def run_loop(poll_seconds: float) -> None:
                 maybe_create_lobby_game(games)
                 maybe_join_bot_lobby_game(games)
                 scheduler.reconcile(games)
+                prune_one_checkpoint()
             except requests.RequestException as exc:
                 logger.warning("poll failed: %s", exc)
             time.sleep(poll_seconds)
@@ -561,6 +568,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv or sys.argv[1:])
     configure_runtime_paths(env_path=args.env_file, state_path=args.state_file)
     load_env_file()
+    checkpoint_store().prepare()
     maybe_restore_token()
 
     if args.register:
