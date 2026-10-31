@@ -1,5 +1,9 @@
 # Release Notes
 
+## 0.2.0 — Python 3.15
+
+- Move the supported runtime to CPython 3.15.2 and validate the complete test suite on that interpreter.
+
 ## 0.1.2 — 2026-10-25
 
 Split belief persistence into atomic per-game checkpoints, migrate and verify legacy state with a protected backup, and clean up server-confirmed completed games. Active runner memory and checkpoint work no longer grow with lifetime game history.
